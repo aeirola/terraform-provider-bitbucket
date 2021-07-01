@@ -23,7 +23,7 @@ type PipelinesEnabled struct {
 }
 
 // Repository is the struct we need to send off to the Bitbucket API to create a repository
-type Repository struct {
+type RepositoryRequest struct {
 	SCM         string `json:"scm,omitempty"`
 	HasWiki     bool   `json:"has_wiki,omitempty"`
 	HasIssues   bool   `json:"has_issues,omitempty"`
@@ -41,6 +41,29 @@ type Repository struct {
 	Links struct {
 		Clone []CloneURL `json:"clone,omitempty"`
 	} `json:"links,omitempty"`
+}
+
+type Parent struct {
+	ParentOwner string
+	ParentSlug  string
+}
+
+func (p *Parent) UnmarshalJSON(data []byte) error {
+	var v map[string]interface{}
+	if err := json.Unmarshal(data, &v); err != nil {
+		return err
+	}
+
+	p.ParentSlug = v["name"].(string)
+	var fullName string
+	fullName = v["full_name"].(string)
+	p.ParentOwner = strings.Split(fullName, "/")[0]
+	return nil
+}
+
+type RepositoryResponse struct {
+	RepositoryRequest
+	Parent `json:"parent",omitempty"`
 }
 
 func resourceRepository() *schema.Resource {
@@ -121,12 +144,21 @@ func resourceRepository() *schema.Resource {
 				Optional: true,
 				Computed: true,
 			},
+			"parent": {
+				Type: schema.TypeMap,
+				Elem: &schema.Schema{
+					Type: schema.TypeString,
+				},
+				Optional: true,
+				ForceNew: true,
+			},
 		},
 	}
 }
 
-func newRepositoryFromResource(d *schema.ResourceData) *Repository {
-	repo := &Repository{
+func newRepositoryFromResource(d *schema.ResourceData) *RepositoryRequest {
+
+	repo := &RepositoryRequest{
 		Name:        d.Get("name").(string),
 		Slug:        d.Get("slug").(string),
 		Language:    d.Get("language").(string),
@@ -204,10 +236,28 @@ func resourceRepositoryCreate(d *schema.ResourceData, m interface{}) error {
 		repoSlug = d.Get("name").(string)
 	}
 
-	_, err = client.Post(fmt.Sprintf("2.0/repositories/%s/%s",
-		d.Get("owner").(string),
-		repoSlug,
-	), bytes.NewBuffer(bytedata))
+	var createRepoEndpoint string
+	var temp interface{}
+	var parentMap map[string]interface{}
+	var parentIsSet bool
+	temp, parentIsSet = d.GetOk("Parent")
+	parentMap = temp.(map[string]interface{})
+	if parentIsSet {
+		// TODO: Validate the parent
+		createRepoEndpoint = fmt.Sprintf(
+			"2.0/repositories/%s/%s/forks",
+			parentMap["owner"].(string),
+			parentMap["slug"].(string),
+		)
+	} else {
+		createRepoEndpoint = fmt.Sprintf(
+			"2.0/repositories/%s/%s",
+			d.Get("owner").(string),
+			repoSlug,
+		)
+	}
+
+	_, err = client.Post(createRepoEndpoint, bytes.NewBuffer(bytedata))
 
 	if err != nil {
 		return err
@@ -260,7 +310,7 @@ func resourceRepositoryRead(d *schema.ResourceData, m interface{}) error {
 
 	if repoReq.StatusCode == 200 {
 
-		var repo Repository
+		var repo RepositoryResponse
 
 		body, readerr := ioutil.ReadAll(repoReq.Body)
 		if readerr != nil {
@@ -285,6 +335,13 @@ func resourceRepositoryRead(d *schema.ResourceData, m interface{}) error {
 		d.Set("website", repo.Website)
 		d.Set("description", repo.Description)
 		d.Set("project_key", repo.Project.Key)
+
+		if repo.ParentOwner != "" {
+			var parentMap = make(map[string]string)
+			parentMap["owner"] = repo.ParentOwner
+			parentMap["slug"] = repo.ParentSlug
+			d.Set("Parent", parentMap)
+		}
 
 		for _, cloneURL := range repo.Links.Clone {
 			if cloneURL.Name == "https" {
