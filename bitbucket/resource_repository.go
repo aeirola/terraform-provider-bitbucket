@@ -43,9 +43,9 @@ type RepositoryRequest struct {
 	} `json:"links,omitempty"`
 }
 
-type Parent struct {
-	ParentOwner string
-	ParentSlug  string
+type parent struct {
+	Owner string
+	Slug  string
 }
 
 func (p *Parent) UnmarshalJSON(data []byte) error {
@@ -54,16 +54,16 @@ func (p *Parent) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
-	p.ParentSlug = v["name"].(string)
 	var fullName string
 	fullName = v["full_name"].(string)
-	p.ParentOwner = strings.Split(fullName, "/")[0]
+	p.Owner = strings.Split(fullName, "/")[0]
+	p.Slug = strings.Split(fullName, "/")[1]
 	return nil
 }
 
 type RepositoryResponse struct {
 	RepositoryRequest
-	Parent `json:"parent",omitempty"`
+	Parent *parent `json:"parent",omitempty"`
 }
 
 func resourceRepository() *schema.Resource {
@@ -336,10 +336,10 @@ func resourceRepositoryRead(d *schema.ResourceData, m interface{}) error {
 		d.Set("description", repo.Description)
 		d.Set("project_key", repo.Project.Key)
 
-		if repo.ParentOwner != "" {
+		if repo.Parent != nil {
 			var parentMap = make(map[string]string)
-			parentMap["owner"] = repo.ParentOwner
-			parentMap["slug"] = repo.ParentSlug
+			parentMap["owner"] = repo.Parent.Owner
+			parentMap["slug"] = repo.Slug
 			d.Set("Parent", parentMap)
 		}
 
