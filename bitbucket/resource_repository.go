@@ -297,7 +297,8 @@ func resourceRepositoryRead(d *schema.ResourceData, m interface{}) error {
 			d.Get("owner").(string),
 			repoSlug))
 
-		if err != nil {
+		// pipelines_config returns 404 if they've never been enabled for the project
+		if err != nil && pipelinesConfigReq.StatusCode != 404{
 			return err
 		}
 
@@ -315,8 +316,9 @@ func resourceRepositoryRead(d *schema.ResourceData, m interface{}) error {
 			}
 
 			d.Set("pipelines_enabled", pipelinesConfig.Enabled)
+		} else if pipelinesConfigReq.StatusCode == 404 {
+			d.Set("pipelines_enabled", false)
 		}
-
 	}
 
 	return nil
