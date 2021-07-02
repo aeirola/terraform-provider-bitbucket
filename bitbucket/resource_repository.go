@@ -6,8 +6,11 @@ import (
 	"fmt"
 	"io/ioutil"
 
+	"net/http"
 	"strings"
+	"time"
 
+    "github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
@@ -41,6 +44,9 @@ type RepositoryRequest struct {
 	Links struct {
 		Clone []CloneURL `json:"clone,omitempty"`
 	} `json:"links,omitempty"`
+	Workspace struct {
+		Slug string `json:"slug,omitempty"`
+	} `json:"workspace,omitempty"`
 }
 
 type parent struct {
@@ -153,6 +159,9 @@ func resourceRepository() *schema.Resource {
 				ForceNew: true,
 			},
 		},
+		Timeouts: &schema.ResourceTimeout{
+			Create: schema.DefaultTimeout(60 * time.Second),
+		},
 	}
 }
 
@@ -224,12 +233,6 @@ func resourceRepositoryCreate(d *schema.ResourceData, m interface{}) error {
 	client := m.(*Client)
 	repo := newRepositoryFromResource(d)
 
-	bytedata, err := json.Marshal(repo)
-
-	if err != nil {
-		return err
-	}
-
 	var repoSlug string
 	repoSlug = d.Get("slug").(string)
 	if repoSlug == "" {
@@ -249,6 +252,7 @@ func resourceRepositoryCreate(d *schema.ResourceData, m interface{}) error {
 			parentMap["owner"].(string),
 			parentMap["slug"].(string),
 		)
+		repo.Workspace.Slug = d.Get("owner").(string)
 	} else {
 		createRepoEndpoint = fmt.Sprintf(
 			"2.0/repositories/%s/%s",
@@ -257,13 +261,17 @@ func resourceRepositoryCreate(d *schema.ResourceData, m interface{}) error {
 		)
 	}
 
+	bytedata, err := json.Marshal(repo)
+	if err != nil {
+		return err
+	}
+
 	_, err = client.Post(createRepoEndpoint, bytes.NewBuffer(bytedata))
 
 	if err != nil {
 		return err
 	}
 	d.SetId(string(fmt.Sprintf("%s/%s", d.Get("owner").(string), repoSlug)))
-
 	var pipelinesEnabled bool
 	pipelinesEnabled = d.Get("pipelines_enabled").(bool)
 	pipelinesConfig := &PipelinesEnabled{Enabled: pipelinesEnabled}
@@ -274,16 +282,29 @@ func resourceRepositoryCreate(d *schema.ResourceData, m interface{}) error {
 		return err
 	}
 
-	_, err = client.Put(fmt.Sprintf("2.0/repositories/%s/%s/pipelines_config",
-		d.Get("owner").(string),
-		repoSlug), bytes.NewBuffer(bytedata))
+	retryErr := resource.Retry(d.Timeout(schema.TimeoutCreate), func() *resource.RetryError {
+		var pipelinesConfigResp *http.Response
+		var err error
+		pipelinesConfigResp, err = client.Put(fmt.Sprintf("2.0/repositories/%s/%s/pipelines_config",
+			d.Get("owner").(string),
+			repoSlug), bytes.NewBuffer(bytedata))
 
-	if err != nil {
-		return err
+		if pipelinesConfigResp.StatusCode == 403 {
+			return resource.RetryableError(
+				fmt.Errorf("Permissions error setting Pipelines Config, retrying."),
+			)
+		}
+		if err != nil {
+			return resource.NonRetryableError(fmt.Errorf("Unexpected error setting Pipelines Config %s", err))
+		}
+		return nil
+	})
+	if retryErr != nil {
+		return retryErr
 	}
-
 	return resourceRepositoryRead(d, m)
 }
+
 func resourceRepositoryRead(d *schema.ResourceData, m interface{}) error {
 	id := d.Id()
 	if id != "" {
