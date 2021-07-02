@@ -10,7 +10,7 @@ import (
 )
 
 func TestAccBitbucketRepository_basic(t *testing.T) {
-	var repo Repository
+	var repo RepositoryResponse
 
 	testUser := os.Getenv("BITBUCKET_USERNAME")
 	testAccBitbucketRepositoryConfig := fmt.Sprintf(`
@@ -36,7 +36,7 @@ func TestAccBitbucketRepository_basic(t *testing.T) {
 }
 
 func TestAccBitbucketRepository_camelcase(t *testing.T) {
-	var repo Repository
+	var repo RepositoryResponse
 
 	testUser := os.Getenv("BITBUCKET_USERNAME")
 	testAccBitbucketRepositoryConfig := fmt.Sprintf(`
@@ -78,7 +78,7 @@ func testAccCheckBitbucketRepositoryDestroy(s *terraform.State) error {
 	return nil
 }
 
-func testAccCheckBitbucketRepositoryExists(n string, repository *Repository) resource.TestCheckFunc {
+func testAccCheckBitbucketRepositoryExists(n string, repository *RepositoryResponse) resource.TestCheckFunc {
 	return func(s *terraform.State) error {
 		rs, ok := s.RootModule().Resources[n]
 		if !ok {

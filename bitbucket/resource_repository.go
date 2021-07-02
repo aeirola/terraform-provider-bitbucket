@@ -6,8 +6,11 @@ import (
 	"fmt"
 	"io/ioutil"
 
+	"net/http"
 	"strings"
+	"time"
 
+    "github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
@@ -23,7 +26,7 @@ type PipelinesEnabled struct {
 }
 
 // Repository is the struct we need to send off to the Bitbucket API to create a repository
-type Repository struct {
+type RepositoryRequest struct {
 	SCM         string `json:"scm,omitempty"`
 	HasWiki     bool   `json:"has_wiki,omitempty"`
 	HasIssues   bool   `json:"has_issues,omitempty"`
@@ -41,6 +44,32 @@ type Repository struct {
 	Links struct {
 		Clone []CloneURL `json:"clone,omitempty"`
 	} `json:"links,omitempty"`
+	Workspace struct {
+		Slug string `json:"slug,omitempty"`
+	} `json:"workspace,omitempty"`
+}
+
+type parent struct {
+	Owner string
+	Slug  string
+}
+
+func (p *parent) UnmarshalJSON(data []byte) error {
+	var v map[string]interface{}
+	if err := json.Unmarshal(data, &v); err != nil {
+		return err
+	}
+
+	var fullName string
+	fullName = v["full_name"].(string)
+	p.Owner = strings.Split(fullName, "/")[0]
+	p.Slug = strings.Split(fullName, "/")[1]
+	return nil
+}
+
+type RepositoryResponse struct {
+	RepositoryRequest
+	Parent *parent `json:"parent",omitempty"`
 }
 
 func resourceRepository() *schema.Resource {
@@ -121,12 +150,24 @@ func resourceRepository() *schema.Resource {
 				Optional: true,
 				Computed: true,
 			},
+			"parent": {
+				Type: schema.TypeMap,
+				Elem: &schema.Schema{
+					Type: schema.TypeString,
+				},
+				Optional: true,
+				ForceNew: true,
+			},
+		},
+		Timeouts: &schema.ResourceTimeout{
+			Create: schema.DefaultTimeout(60 * time.Second),
 		},
 	}
 }
 
-func newRepositoryFromResource(d *schema.ResourceData) *Repository {
-	repo := &Repository{
+func newRepositoryFromResource(d *schema.ResourceData) *RepositoryRequest {
+
+	repo := &RepositoryRequest{
 		Name:        d.Get("name").(string),
 		Slug:        d.Get("slug").(string),
 		Language:    d.Get("language").(string),
@@ -192,28 +233,45 @@ func resourceRepositoryCreate(d *schema.ResourceData, m interface{}) error {
 	client := m.(*Client)
 	repo := newRepositoryFromResource(d)
 
-	bytedata, err := json.Marshal(repo)
-
-	if err != nil {
-		return err
-	}
-
 	var repoSlug string
 	repoSlug = d.Get("slug").(string)
 	if repoSlug == "" {
 		repoSlug = d.Get("name").(string)
 	}
 
-	_, err = client.Post(fmt.Sprintf("2.0/repositories/%s/%s",
-		d.Get("owner").(string),
-		repoSlug,
-	), bytes.NewBuffer(bytedata))
+	var createRepoEndpoint string
+	var temp interface{}
+	var parentMap map[string]interface{}
+	var parentIsSet bool
+	temp, parentIsSet = d.GetOk("parent")
+	if parentIsSet {
+		// TODO: Validate the parent
+		parentMap = temp.(map[string]interface{})
+		createRepoEndpoint = fmt.Sprintf(
+			"2.0/repositories/%s/%s/forks",
+			parentMap["owner"].(string),
+			parentMap["slug"].(string),
+		)
+		repo.Workspace.Slug = d.Get("owner").(string)
+	} else {
+		createRepoEndpoint = fmt.Sprintf(
+			"2.0/repositories/%s/%s",
+			d.Get("owner").(string),
+			repoSlug,
+		)
+	}
+
+	bytedata, err := json.Marshal(repo)
+	if err != nil {
+		return err
+	}
+
+	_, err = client.Post(createRepoEndpoint, bytes.NewBuffer(bytedata))
 
 	if err != nil {
 		return err
 	}
 	d.SetId(string(fmt.Sprintf("%s/%s", d.Get("owner").(string), repoSlug)))
-
 	var pipelinesEnabled bool
 	pipelinesEnabled = d.Get("pipelines_enabled").(bool)
 	pipelinesConfig := &PipelinesEnabled{Enabled: pipelinesEnabled}
@@ -224,16 +282,29 @@ func resourceRepositoryCreate(d *schema.ResourceData, m interface{}) error {
 		return err
 	}
 
-	_, err = client.Put(fmt.Sprintf("2.0/repositories/%s/%s/pipelines_config",
-		d.Get("owner").(string),
-		repoSlug), bytes.NewBuffer(bytedata))
+	retryErr := resource.Retry(d.Timeout(schema.TimeoutCreate), func() *resource.RetryError {
+		var pipelinesConfigResp *http.Response
+		var err error
+		pipelinesConfigResp, err = client.Put(fmt.Sprintf("2.0/repositories/%s/%s/pipelines_config",
+			d.Get("owner").(string),
+			repoSlug), bytes.NewBuffer(bytedata))
 
-	if err != nil {
-		return err
+		if pipelinesConfigResp.StatusCode == 403 {
+			return resource.RetryableError(
+				fmt.Errorf("Permissions error setting Pipelines Config, retrying."),
+			)
+		}
+		if err != nil {
+			return resource.NonRetryableError(fmt.Errorf("Unexpected error setting Pipelines Config %s", err))
+		}
+		return nil
+	})
+	if retryErr != nil {
+		return retryErr
 	}
-
 	return resourceRepositoryRead(d, m)
 }
+
 func resourceRepositoryRead(d *schema.ResourceData, m interface{}) error {
 	id := d.Id()
 	if id != "" {
@@ -260,7 +331,7 @@ func resourceRepositoryRead(d *schema.ResourceData, m interface{}) error {
 
 	if repoReq.StatusCode == 200 {
 
-		var repo Repository
+		var repo RepositoryResponse
 
 		body, readerr := ioutil.ReadAll(repoReq.Body)
 		if readerr != nil {
@@ -285,6 +356,14 @@ func resourceRepositoryRead(d *schema.ResourceData, m interface{}) error {
 		d.Set("website", repo.Website)
 		d.Set("description", repo.Description)
 		d.Set("project_key", repo.Project.Key)
+
+		if repo.Parent != nil {
+			var parentMap = make(map[string]string)
+			parentMap["owner"] = repo.Parent.Owner
+			parentMap["slug"] = repo.Parent.Slug
+			d.Set("parent", parentMap)
+
+		}
 
 		for _, cloneURL := range repo.Links.Clone {
 			if cloneURL.Name == "https" {
