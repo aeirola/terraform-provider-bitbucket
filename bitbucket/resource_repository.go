@@ -48,7 +48,7 @@ type parent struct {
 	Slug  string
 }
 
-func (p *Parent) UnmarshalJSON(data []byte) error {
+func (p *parent) UnmarshalJSON(data []byte) error {
 	var v map[string]interface{}
 	if err := json.Unmarshal(data, &v); err != nil {
 		return err

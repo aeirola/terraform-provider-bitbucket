@@ -56,6 +56,8 @@ The following arguments are supported:
   allow_forks.
 * `description` - (Optional) What the description of the repo is.
 * `pipelines_enabled` - (Optional) Turn on to enable pipelines support
+* `parent` - (Optional) Specify a respository to fork from. Expects
+a map with two keys, the owner and slug of the repository to fork.
 
 ## Computed Arguments
 
