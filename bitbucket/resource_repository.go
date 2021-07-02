@@ -240,10 +240,10 @@ func resourceRepositoryCreate(d *schema.ResourceData, m interface{}) error {
 	var temp interface{}
 	var parentMap map[string]interface{}
 	var parentIsSet bool
-	temp, parentIsSet = d.GetOk("Parent")
-	parentMap = temp.(map[string]interface{})
+	temp, parentIsSet = d.GetOk("parent")
 	if parentIsSet {
 		// TODO: Validate the parent
+		parentMap = temp.(map[string]interface{})
 		createRepoEndpoint = fmt.Sprintf(
 			"2.0/repositories/%s/%s/forks",
 			parentMap["owner"].(string),
@@ -339,13 +339,9 @@ func resourceRepositoryRead(d *schema.ResourceData, m interface{}) error {
 		if repo.Parent != nil {
 			var parentMap = make(map[string]string)
 			parentMap["owner"] = repo.Parent.Owner
-<<<<<<< HEAD
 			parentMap["slug"] = repo.Parent.Slug
 			d.Set("parent", parentMap)
-=======
-			parentMap["slug"] = repo.Slug
-			d.Set("Parent", parentMap)
->>>>>>> e6099d2eec3c70f14227ed9a98ba5f3f1012a05e
+
 		}
 
 		for _, cloneURL := range repo.Links.Clone {
