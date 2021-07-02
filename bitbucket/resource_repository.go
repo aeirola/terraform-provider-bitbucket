@@ -339,8 +339,13 @@ func resourceRepositoryRead(d *schema.ResourceData, m interface{}) error {
 		if repo.Parent != nil {
 			var parentMap = make(map[string]string)
 			parentMap["owner"] = repo.Parent.Owner
+<<<<<<< HEAD
 			parentMap["slug"] = repo.Parent.Slug
 			d.Set("parent", parentMap)
+=======
+			parentMap["slug"] = repo.Slug
+			d.Set("Parent", parentMap)
+>>>>>>> e6099d2eec3c70f14227ed9a98ba5f3f1012a05e
 		}
 
 		for _, cloneURL := range repo.Links.Clone {
