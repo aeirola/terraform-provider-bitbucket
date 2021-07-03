@@ -45,8 +45,14 @@ func resourceDeploymentVariable() *schema.Resource {
 				Required: true,
 			},
 			"value": {
-				Type:     schema.TypeString,
-				Required: true,
+				Type:      schema.TypeString,
+				Required:  true,
+				Sensitive: true,
+			},
+			"hash": {
+				Type:      schema.TypeString,
+				Computed:  true,
+				Sensitive: true,
 			},
 			"secured": {
 				Type:     schema.TypeBool,
@@ -106,6 +112,7 @@ func resourceDeploymentVariableCreate(d *schema.ResourceData, m interface{}) err
 		return decodeerr
 	}
 	d.Set("uuid", rv.UUID)
+	d.Set("hash", hashValue(rvcr.Value))
 	d.SetId(rv.UUID)
 
 	time.Sleep(5000 * time.Millisecond) // sleep for a while, to allow BitBucket cache to catch up
@@ -145,8 +152,18 @@ func resourceDeploymentVariableRead(d *schema.ResourceData, m interface{}) error
 			if rv.UUID == uuid {
 				d.SetId(rv.UUID)
 				d.Set("key", rv.Key)
-				d.Set("value", rv.Value)
 				d.Set("secured", rv.Secured)
+				switch {
+				case rv.Secured:
+					v := d.Get("value").(string)
+					h := d.Get("hash").(string)
+					if hashValue(v) != h {
+						d.Set("value", "")
+						d.Set("hash", "")
+					}
+				default:
+					d.Set("value", rv.Value)
+				}
 				return nil
 			}
 		}
@@ -184,6 +201,7 @@ func resourceDeploymentVariableUpdate(d *schema.ResourceData, m interface{}) err
 		return nil
 	}
 
+	d.Set("hash", hashValue(rvcr.Value))
 	return resourceDeploymentVariableRead(d, m)
 }
 
