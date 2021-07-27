@@ -28,6 +28,7 @@ func Provider() *schema.Provider {
 			"bitbucket_default_reviewers":   resourceDefaultReviewers(),
 			"bitbucket_repository":          resourceRepository(),
 			"bitbucket_repository_variable": resourceRepositoryVariable(),
+			"bitbucket_deploy_key":          resourceDeployKey(),
 			"bitbucket_project":             resourceProject(),
 			"bitbucket_branch_restriction":  resourceBranchRestriction(),
 			"bitbucket_deployment":          resourceDeployment(),
