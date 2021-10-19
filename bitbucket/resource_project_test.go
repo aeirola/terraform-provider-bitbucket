@@ -43,7 +43,7 @@ func testAccCheckBitbucketProjectDestroy(s *terraform.State) error {
 		return fmt.Errorf("Not found %s", "bitbucket_project.test_project")
 	}
 
-	response, _ := client.Get(fmt.Sprintf("2.0/teams/%s/projects/%s", rs.Primary.Attributes["owner"], rs.Primary.Attributes["name"]))
+	response, _ := client.Get(fmt.Sprintf("2.0/workspaces/%s/projects/%s", rs.Primary.Attributes["owner"], rs.Primary.Attributes["name"]))
 
 	if response.StatusCode != 404 {
 		return fmt.Errorf("Project still exists")

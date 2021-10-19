@@ -80,7 +80,7 @@ func resourceProjectUpdate(d *schema.ResourceData, m interface{}) error {
 		projectKey = d.Get("key").(string)
 	}
 
-	_, err := client.Put(fmt.Sprintf("2.0/teams/%s/projects/%s",
+	_, err := client.Put(fmt.Sprintf("2.0/workspaces/%s/projects/%s",
 		d.Get("owner").(string),
 		projectKey,
 	), jsonpayload)
@@ -113,7 +113,7 @@ func resourceProjectCreate(d *schema.ResourceData, m interface{}) error {
 		return fmt.Errorf("owner must not be a empty string")
 	}
 
-	_, err = client.Post(fmt.Sprintf("2.0/teams/%s/projects/",
+	_, err = client.Post(fmt.Sprintf("2.0/workspaces/%s/projects/",
 		d.Get("owner").(string),
 	), bytes.NewBuffer(bytedata))
 
@@ -145,7 +145,7 @@ func resourceProjectRead(d *schema.ResourceData, m interface{}) error {
 	}
 
 	client := m.(*Client)
-	projectReq, _ := client.Get(fmt.Sprintf("2.0/teams/%s/projects/%s",
+	projectReq, _ := client.Get(fmt.Sprintf("2.0/workspaces/%s/projects/%s",
 		d.Get("owner").(string),
 		projectKey,
 	))
@@ -182,7 +182,7 @@ func resourceProjectDelete(d *schema.ResourceData, m interface{}) error {
 	}
 
 	client := m.(*Client)
-	_, err := client.Delete(fmt.Sprintf("2.0/teams/%s/projects/%s",
+	_, err := client.Delete(fmt.Sprintf("2.0/workspaces/%s/projects/%s",
 		d.Get("owner").(string),
 		projectKey,
 	))
