@@ -15,7 +15,7 @@ type DeployKey struct {
 	Label   string `json:"label,omitempty"`
 	Key     string `json:"key,omitempty"`
 	Comment string `json:"comment,omitempty"`
-	Id      int `json:"id,omitempty"`
+	Id      int    `json:"id,omitempty"`
 }
 
 func resourceDeployKey() *schema.Resource {
