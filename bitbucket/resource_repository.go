@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-    "github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
@@ -275,6 +275,7 @@ func resourceRepositoryCreate(d *schema.ResourceData, m interface{}) error {
 	var pipelinesEnabled bool
 	pipelinesEnabled = d.Get("pipelines_enabled").(bool)
 	pipelinesConfig := &PipelinesEnabled{Enabled: pipelinesEnabled}
+	lowerRepoSlug := strings.ToLower(repoSlug)
 
 	bytedata, err = json.Marshal(pipelinesConfig)
 
@@ -287,9 +288,9 @@ func resourceRepositoryCreate(d *schema.ResourceData, m interface{}) error {
 		var err error
 		pipelinesConfigResp, err = client.Put(fmt.Sprintf("2.0/repositories/%s/%s/pipelines_config",
 			d.Get("owner").(string),
-			repoSlug), bytes.NewBuffer(bytedata))
+			lowerRepoSlug), bytes.NewBuffer(bytedata))
 
-		if pipelinesConfigResp.StatusCode == 403 {
+		if pipelinesConfigResp.StatusCode == 403 || pipelinesConfigResp.StatusCode == 404 {
 			return resource.RetryableError(
 				fmt.Errorf("Permissions error setting Pipelines Config, retrying."),
 			)
@@ -372,9 +373,11 @@ func resourceRepositoryRead(d *schema.ResourceData, m interface{}) error {
 				d.Set("clone_ssh", cloneURL.Href)
 			}
 		}
+
+		lowerRepoSlug := strings.ToLower(repoSlug)
 		pipelinesConfigReq, err := client.Get(fmt.Sprintf("2.0/repositories/%s/%s/pipelines_config",
 			d.Get("owner").(string),
-			repoSlug))
+			lowerRepoSlug))
 
 		if err != nil {
 			return err
