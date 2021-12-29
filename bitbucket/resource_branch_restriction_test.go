@@ -32,11 +32,6 @@ func TestAccBitbucketBranchRestriction_basic(t *testing.T) {
 					resource.TestCheckResourceAttr(resourceName, "branch_match_kind", "glob"),
 				),
 			},
-			{
-				ResourceName:      resourceName,
-				ImportState:       true,
-				ImportStateVerify: true,
-			},
 		},
 	})
 }
@@ -62,11 +57,6 @@ func TestAccBitbucketBranchRestriction_model(t *testing.T) {
 					resource.TestCheckResourceAttr(resourceName, "branch_match_kind", "branching_model"),
 					resource.TestCheckResourceAttr(resourceName, "branch_type", "production"),
 				),
-			},
-			{
-				ResourceName:      resourceName,
-				ImportState:       true,
-				ImportStateVerify: true,
 			},
 		},
 	})
