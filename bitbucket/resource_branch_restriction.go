@@ -4,21 +4,24 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
 	"io/ioutil"
 	"log"
 	"net/url"
+
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
 )
 
 // BranchRestriction is the data we need to send to create a new branch restriction for the repository
 type BranchRestriction struct {
-	ID      int     `json:"id,omitempty"`
-	Kind    string  `json:"kind,omitempty"`
-	Pattern string  `json:"pattern,omitempty"`
-	Value   int     `json:"value,omitempty"`
-	Users   []User  `json:"users,omitempty"`
-	Groups  []Group `json:"groups,omitempty"`
+	ID              int     `json:"id,omitempty"`
+	Kind            string  `json:"kind,omitempty"`
+	BranchMatchkind string  `json:"branch_match_kind,omitempty"`
+	BranchType      string  `json:"branch_type,omitempty"`
+	Pattern         string  `json:"pattern,omitempty"`
+	Value           int     `json:"value,omitempty"`
+	Users           []User  `json:"users,omitempty"`
+	Groups          []Group `json:"groups,omitempty"`
 }
 
 // User is just the user struct we want to use for BranchRestrictions
@@ -38,7 +41,6 @@ func resourceBranchRestriction() *schema.Resource {
 		Read:   resourceBranchRestrictionsRead,
 		Update: resourceBranchRestrictionsUpdate,
 		Delete: resourceBranchRestrictionsDelete,
-		Exists: resourceBranchRestrictionsExists,
 
 		Schema: map[string]*schema.Schema{
 			"owner": {
@@ -56,22 +58,36 @@ func resourceBranchRestriction() *schema.Resource {
 				Required: true,
 				ValidateFunc: validation.StringInSlice([]string{
 					"require_tasks_to_be_completed",
+					"allow_auto_merge_when_builds_pass",
 					"require_passing_builds_to_merge",
 					"force",
 					"require_all_dependencies_merged",
+					"require_commits_behind",
+					"restrict_merges, enforce_merge_checks",
+					"reset_pullrequest_changes_requested_on_change",
+					"require_no_changes_requested",
+					"smart_reset_pullrequest_approvals",
 					"push",
 					"require_approvals_to_merge",
-					"enforce_merge_checks",
-					"restrict_merges",
+					"require_default_reviewer_approvals_to_merge",
 					"reset_pullrequest_approvals_on_change",
 					"delete",
-					"require_default_reviewer_approvals_to_merge",
-				},
-					false),
+				}, false),
+			},
+			"branch_match_kind": {
+				Type:         schema.TypeString,
+				Optional:     true,
+				Default:      "glob",
+				ValidateFunc: validation.StringInSlice([]string{"branching_model", "glob"}, false),
 			},
 			"pattern": {
 				Type:     schema.TypeString,
-				Required: true,
+				Optional: true,
+			},
+			"branch_type": {
+				Type:         schema.TypeString,
+				Optional:     true,
+				ValidateFunc: validation.StringInSlice([]string{"feature", "bugfix", "release", "hotfix", "development", "production"}, false),
 			},
 			"users": {
 				Type:     schema.TypeSet,
@@ -119,13 +135,27 @@ func createBranchRestriction(d *schema.ResourceData) *BranchRestriction {
 		groups = append(groups, Group{Owner: User{Username: m["owner"].(string)}, Slug: m["slug"].(string)})
 	}
 
-	return &BranchRestriction{
-		Kind:    d.Get("kind").(string),
-		Pattern: d.Get("pattern").(string),
-		Value:   d.Get("value").(int),
-		Users:   users,
-		Groups:  groups,
+	restict := &BranchRestriction{
+		Kind:   d.Get("kind").(string),
+		Value:  d.Get("value").(int),
+		Users:  users,
+		Groups: groups,
 	}
+
+	if v, ok := d.GetOk("pattern"); ok {
+		restict.Pattern = v.(string)
+	}
+
+	if v, ok := d.GetOk("branch_type"); ok {
+		restict.BranchType = v.(string)
+	}
+
+	if v, ok := d.GetOk("branch_match_kind"); ok {
+		restict.BranchMatchkind = v.(string)
+	}
+
+	return restict
+
 }
 
 func resourceBranchRestrictionsCreate(d *schema.ResourceData, m interface{}) error {
@@ -191,6 +221,8 @@ func resourceBranchRestrictionsRead(d *schema.ResourceData, m interface{}) error
 		d.Set("value", branchRestriction.Value)
 		d.Set("users", branchRestriction.Users)
 		d.Set("groups", branchRestriction.Groups)
+		d.Set("branch_type", branchRestriction.BranchType)
+		d.Set("branch_match_kind", branchRestriction.BranchMatchkind)
 	}
 
 	return nil
@@ -226,27 +258,4 @@ func resourceBranchRestrictionsDelete(d *schema.ResourceData, m interface{}) err
 	))
 
 	return err
-}
-
-func resourceBranchRestrictionsExists(d *schema.ResourceData, m interface{}) (bool, error) {
-	client := m.(*Client)
-
-	if v := d.Id(); v != "" {
-		branchRestrictionsReq, err := client.Get(fmt.Sprintf("2.0/repositories/%s/%s/branch-restrictions/%s",
-			d.Get("owner").(string),
-			d.Get("repository").(string),
-			url.PathEscape(d.Id()),
-		))
-		if err != nil {
-			panic(err)
-		}
-
-		if branchRestrictionsReq.StatusCode != 200 {
-			return false, err
-		}
-
-		return true, nil
-	}
-
-	return false, nil
 }

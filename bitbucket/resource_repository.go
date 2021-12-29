@@ -84,6 +84,7 @@ func resourceRepository() *schema.Resource {
 			"project_key": {
 				Type:     schema.TypeString,
 				Optional: true,
+				Computed: true,
 			},
 			"is_private": {
 				Type:     schema.TypeBool,
