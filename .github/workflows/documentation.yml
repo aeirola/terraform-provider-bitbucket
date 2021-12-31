@@ -48,3 +48,20 @@ jobs:
           key: ${{ runner.os }}-go-pkg-mod-${{ hashFiles('go.sum') }}
       - run: go install github.com/client9/misspell/cmd/misspell
       - run: misspell -error -source text docs/
+  terrafmt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      # See also: https://github.com/actions/setup-go/pull/62
+      - run: echo "GO_VERSION=$(cat .go-version)" >> $GITHUB_ENV
+      - uses: actions/setup-go@v2
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - uses: actions/cache@v2
+        continue-on-error: true
+        timeout-minutes: 2
+        with:
+          path: ~/go/pkg/mod
+          key: ${{ runner.os }}-go-pkg-mod-${{ hashFiles('go.sum') }}
+      - run: go install github.com/katbyte/terrafmt
+      - run: terrafmt diff ./website --check --pattern '*.markdown'      
