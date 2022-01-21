@@ -6,6 +6,8 @@ description: |-
   The Bitbucket provider to interact with repositories, projects, etc..
 ---
 
+!> Deprecated! Please use one of the more maintained forks, for example [DrFaust92/bitbucket](https://registry.terraform.io/providers/DrFaust92/bitbucket).
+
 # Bitbucket Provider
 
 The Bitbucket provider allows you to manage resources including repositories,

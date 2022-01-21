@@ -1,6 +1,6 @@
 # Maintenance status
 
-!> Deprecated! Please use one of the more maintained forks, for example [DrFaust92/bitbucket](https://registry.terraform.io/providers/DrFaust92/bitbucket).
+:no_entry_sign: **Deprecated!** Please use one of the more maintained forks, for example [DrFaust92/terraform-provider-bitbucket](https://github.com/DrFaust92/terraform-provider-bitbucket).
 
 I just took the archived repository, and released it to the Terraform Registry. I'm not a Go developer, so I'm not going to maintain this repository anymore.
 
