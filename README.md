@@ -1,6 +1,8 @@
 # Maintenance status
 
-Unmaintained, maintainers needed! I just took the archived repository, and released it to the Terraform Registry. I'm not a Go developer, so I'll not be able to maintain this repository in the long run. PRs are welcome, and I'll try to merge and release them as frequently as possible.
+!> Deprecated! Please use one of the more maintained forks, for example [DrFaust92/bitbucket](https://registry.terraform.io/providers/DrFaust92/bitbucket).
+
+I just took the archived repository, and released it to the Terraform Registry. I'm not a Go developer, so I'm not going to maintain this repository anymore.
 
 If you would like Atlassian to take ownership of the provider, you can voice your opinion at [BCLOUD-17209](https://jira.atlassian.com/browse/BCLOUD-17209).
 
